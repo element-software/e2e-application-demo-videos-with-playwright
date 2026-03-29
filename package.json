@@ -1,0 +1,18 @@
+{
+  "name": "e2e-application-demo-videos-with-playwright",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Generate full application demo videos using Playwright and ffmpeg",
+  "scripts": {
+    "app:install": "npm install --prefix app",
+    "app:dev": "npm run dev --prefix app",
+    "app:build": "npm run build --prefix app",
+    "app:preview": "npm run preview --prefix app",
+    "demo:video:capture": "npx playwright test",
+    "demo:video:render": "node scripts/render-video.mjs",
+    "demo:video": "npm run demo:video:capture && npm run demo:video:render"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1"
+  }
+}
