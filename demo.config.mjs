@@ -10,10 +10,10 @@
 /** @type {import('./scripts/render-video.mjs').DemoConfig} */
 const config = {
   // ── Capture ──────────────────────────────────────────────────
-  /** Directory where Playwright writes slide screenshots */
+  /** Directory where Playwright writes per-slide WebM clips */
   slidesDir: 'demo/slides',
 
-  /** Path to the ffmpeg concat-demuxer manifest written by Playwright */
+  /** ffmpeg concat-demuxer manifest listing slide videos (file '…' per line) */
   manifestPath: 'demo/manifest.txt',
 
   // ── Render ───────────────────────────────────────────────────
@@ -43,6 +43,16 @@ const config = {
    * Set to 0 to disable.
    */
   audioFadeDuration: 2,
+
+  // ── Branding (ffmpeg drawtext + optional logo overlay) ─────────
+  branding: {
+    /** PNG in repo (AppFlow palette); replace with your own asset if you like */
+    logoPath: 'demo/branding/logo.png',
+    title: 'AppFlow Demo',
+    tagline: 'E2E capture • fixture-driven profile • Playwright + ffmpeg',
+    /** Optional: absolute or repo-relative TTF if the OS default is missing */
+    fontFile: null,
+  },
 };
 
 export default config;

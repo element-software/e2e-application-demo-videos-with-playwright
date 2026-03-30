@@ -1,18 +1,47 @@
-import { NavLink } from 'react-router-dom';
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+
+function navLinkClass(pathname: string, href: string, end?: boolean): string {
+  const active = end ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+  return active ? 'active' : '';
+}
 
 export default function NavBar() {
+  const pathname = usePathname() ?? '';
+
   return (
     <nav className="nav">
-      <div className="nav-logo">
+      <Link href="/" className="nav-logo">
         <div className="nav-logo-icon" />
         AppFlow
-      </div>
+      </Link>
       <ul className="nav-links">
-        <li><NavLink to="/" end className={({ isActive }) => isActive ? 'active' : ''}>Home</NavLink></li>
-        <li><NavLink to="/features" className={({ isActive }) => isActive ? 'active' : ''}>Features</NavLink></li>
-        <li><NavLink to="/dashboard" className={({ isActive }) => isActive ? 'active' : ''}>Dashboard</NavLink></li>
+        <li>
+          <Link href="/" className={navLinkClass(pathname, '/', true)}>
+            Home
+          </Link>
+        </li>
+        <li>
+          <Link href="/features" className={navLinkClass(pathname, '/features')}>
+            Features
+          </Link>
+        </li>
+        <li>
+          <Link href="/dashboard" className={navLinkClass(pathname, '/dashboard')}>
+            Dashboard
+          </Link>
+        </li>
+        <li>
+          <Link href="/profile" className={navLinkClass(pathname, '/profile')}>
+            Profile
+          </Link>
+        </li>
       </ul>
-      <NavLink to="/get-started" className="nav-cta">Get Started</NavLink>
+      <Link href="/get-started" className="nav-cta">
+        Get Started
+      </Link>
     </nav>
   );
 }

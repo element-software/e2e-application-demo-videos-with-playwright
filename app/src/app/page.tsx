@@ -1,6 +1,6 @@
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 
-export default function Home() {
+export default function HomePage() {
   return (
     <section className="page hero" data-testid="page-home">
       <span className="badge">Now in public beta</span>
@@ -13,10 +13,10 @@ export default function Home() {
         visualise metrics, and collaborate without friction.
       </p>
       <div className="hero-actions">
-        <Link to="/get-started" className="btn btn-primary">
+        <Link href="/get-started" className="btn btn-primary">
           Start for free →
         </Link>
-        <Link to="/features" className="btn btn-outline">
+        <Link href="/features" className="btn btn-outline">
           See features
         </Link>
       </div>

@@ -1,7 +1,9 @@
-import { useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+'use client';
 
-export default function GetStarted() {
+import Link from 'next/link';
+import { useState, type FormEvent } from 'react';
+
+export default function GetStartedPage() {
   const [submitted, setSubmitted] = useState(false);
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
@@ -64,7 +66,7 @@ export default function GetStarted() {
         </form>
         <p className="form-footer">
           Already have an account?{' '}
-          <Link to="/">Sign in</Link>
+          <Link href="/">Sign in</Link>
         </p>
       </div>
     </section>

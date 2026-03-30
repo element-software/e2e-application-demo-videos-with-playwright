@@ -13,6 +13,6 @@
     "demo:video": "npm run demo:video:capture && npm run demo:video:render"
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.1"
+    "@playwright/test": "^1.58.2"
   }
 }

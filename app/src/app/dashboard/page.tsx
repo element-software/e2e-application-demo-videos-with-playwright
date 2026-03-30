@@ -19,7 +19,7 @@ const BAR_DATA = [
 
 const BAR_MAX_PCT = Math.max(...BAR_DATA.map((d) => d.pct));
 
-export default function Dashboard() {
+export default function DashboardPage() {
   return (
     <section className="page dashboard-page" data-testid="page-dashboard">
       <div className="container">
@@ -50,7 +50,11 @@ export default function Dashboard() {
           <div className="bar-chart" role="img" aria-label="Bar chart of monthly active users">
             {BAR_DATA.map((d) => (
               <div className="bar-wrap" key={d.month}>
-              <div className="bar" style={{ height: Math.round((d.pct / BAR_MAX_PCT) * BAR_MAX_PX) }} title={`${d.month}: ${d.pct}%`} />
+                <div
+                  className="bar"
+                  style={{ height: Math.round((d.pct / BAR_MAX_PCT) * BAR_MAX_PX) }}
+                  title={`${d.month}: ${d.pct}%`}
+                />
                 <span className="bar-label">{d.month}</span>
               </div>
             ))}

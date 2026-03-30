@@ -31,7 +31,7 @@ const FEATURES = [
   },
 ];
 
-export default function Features() {
+export default function FeaturesPage() {
   return (
     <section className="page features-page" data-testid="page-features">
       <div className="section-header">
