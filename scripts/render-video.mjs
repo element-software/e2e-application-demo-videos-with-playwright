@@ -203,24 +203,9 @@ console.log(`[render-video] Output: ${outputPath}`);
 
 mkdirSync(dirname(outputPath), { recursive: true });
 
-const fontFile = resolveFontFile(branding.fontFile);
-if (!existsSync(fontFile)) {
-  console.error(
-    `[render-video] No usable font for drawtext (tried ${fontFile}).\n` +
-      `  Set branding.fontFile in demo.config.mjs to a valid .ttf path.`
-  );
-  process.exit(1);
-}
-
+// (Lower-third text was removed; keep only logo overlay + optional audio.)
+// Keep this temp dir cleanup logic (no-op if unused) for backward-compat.
 const tmpLabelDir = mkdtempSync(join(os.tmpdir(), 'demo-render-brand-'));
-const titleFile = join(tmpLabelDir, 'title.txt');
-const taglineFile = join(tmpLabelDir, 'tagline.txt');
-writeFileSync(titleFile, brandTitle, 'utf8');
-writeFileSync(taglineFile, brandTagline, 'utf8');
-
-const escFont = escapePathForFilter(fontFile);
-const escTitleFile = escapePathForFilter(titleFile);
-const escTagFile = escapePathForFilter(taglineFile);
 
 /** @type {string[]} */
 const args = ['-y', '-f', 'concat', '-safe', '0', '-i', manifestPath];
@@ -234,7 +219,8 @@ if (useLogo && logoAbs) {
 }
 
 if (audioPath) {
-  args.push('-i', audioPath);
+  // Loop audio so short tracks can cover the full concat duration (we `atrim` below).
+  args.push('-stream_loop', '-1', '-i', audioPath);
   audioInputIndex = logoInputIndex === -1 ? 1 : 2;
 }
 
@@ -243,15 +229,10 @@ const videoChain = useLogo && logoInputIndex >= 0
   ? [
       `[0:v]fps=${fps},format=yuv420p[base]`,
       `[${logoInputIndex}:v]scale=56:-1,format=yuva420p[lg]`,
-      `[base][lg]overlay=W-w-20:20:shortest=1[ov0]`,
-      `[ov0]drawbox=x=0:y=ih-56:w=iw:h=56:color=black@0.48:t=fill[ov1]`,
-      `[ov1]drawtext=fontfile='${escFont}':textfile='${escTitleFile}':x=24:y=h-38:fontsize=20:fontcolor=white[ov2]`,
-      `[ov2]drawtext=fontfile='${escFont}':textfile='${escTagFile}':x=24:y=h-20:fontsize=13:fontcolor=white@0.88[outv]`,
+      `[base][lg]overlay=W-w-20:20:shortest=1[outv]`,
     ]
   : [
-      `[0:v]fps=${fps},format=yuv420p,drawbox=x=0:y=ih-56:w=iw:h=56:color=black@0.48:t=fill[ov1]`,
-      `[ov1]drawtext=fontfile='${escFont}':textfile='${escTitleFile}':x=24:y=h-38:fontsize=20:fontcolor=white[ov2]`,
-      `[ov2]drawtext=fontfile='${escFont}':textfile='${escTagFile}':x=24:y=h-20:fontsize=13:fontcolor=white@0.88[outv]`,
+      `[0:v]fps=${fps},format=yuv420p[outv]`,
     ];
 
 let filterComplex = videoChain.join(';');

@@ -36,7 +36,7 @@ const config = {
    *   https://pixabay.com/music/  (free for commercial use)
    * or generated with  `ffmpeg -f lavfi -i "sine=frequency=440:duration=30" audio/placeholder.mp3`
    */
-  audioPath: null, // e.g. 'audio/background.mp3'
+  audioPath: 'demo/branding/soundtrack.mp3',
 
   /**
    * Duration (seconds) of the fade-out at the end of the audio track.

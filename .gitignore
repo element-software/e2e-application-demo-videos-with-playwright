@@ -12,7 +12,6 @@ playwright-report/
 
 # Demo pipeline — generated artefacts (not checked in)
 demo/slides/
-demo/output/
 demo/manifest.txt
 
 # Audio (replace with your own; not committed)

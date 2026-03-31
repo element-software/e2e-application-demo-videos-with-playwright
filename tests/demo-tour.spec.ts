@@ -15,10 +15,19 @@
  */
 
 import { test, type Browser, type BrowserContext, type Page } from '@playwright/test';
-import * as fs from 'fs';
+import { promises as fs } from 'node:fs';
 import * as os from 'os';
 import * as path from 'path';
 import { CAPTURE_DEMO_PROFILE } from '../e2e/fixtures/appflowProfile';
+import {
+  addForceDarkFirstPaintInitScript,
+  asDataUri,
+  overrideChromiumCaptureBackground,
+  padClipToMs,
+  primeEmbeddedDemoVideos,
+  recordVideoForViewport,
+  withLocalClipServer,
+} from './support/demoVideo';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -29,23 +38,13 @@ const BASE_URL = process.env.DEMO_BASE_URL ?? 'http://localhost:3000';
 
 const VIEWPORT = { width: 1280, height: 720 };
 
-/** RGBA for `Emulation.setDefaultBackgroundColorOverride` (alpha 0–1). */
-const CAPTURE_PAGE_BG = { r: 15, g: 17, b: 23, a: 1 } as const;
+const DEMO_TMP_DIR = path.join(REPO_ROOT, 'demo', '.tmp');
+const STILLS_DIR = path.join(DEMO_TMP_DIR, 'stills');
 
-/**
- * Chromium video capture can paint white between blank document → first navigation.
- * Set a dark compositor background before any `goto` to avoid white flashes at clip boundaries.
- */
-async function overrideChromiumCaptureBackground(page: Page) {
-  try {
-    const session = await page.context().newCDPSession(page);
-    await session.send('Emulation.setDefaultBackgroundColorOverride', {
-      color: CAPTURE_PAGE_BG,
-    });
-  } catch {
-    /* Chromium-only; ignore if CDP is unavailable. */
-  }
-}
+const SLIDE_SECONDS = 4.0;
+const CLIP_MS = Math.round(SLIDE_SECONDS * 1000);
+
+const APPFLOW_LOGO_PATH = path.join(REPO_ROOT, 'demo', 'branding', 'logo.png');
 
 /**
  * Injected into every recorded page — follows real mouse events from Playwright.
@@ -272,47 +271,40 @@ async function recordSlide(
   name: string,
   run: (page: Page) => Promise<void>
 ): Promise<string> {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pw-demo-slide-'));
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pw-demo-slide-'));
   const context = await browser.newContext({
     baseURL: BASE_URL,
     viewport: VIEWPORT,
     reducedMotion: 'no-preference',
-    recordVideo: {
-      dir: tmpDir,
-      size: VIEWPORT,
-    },
+    ...recordVideoForViewport(tmpDir, VIEWPORT),
   });
   await routeDemoProfileFixture(context);
   const page = await context.newPage();
   await overrideChromiumCaptureBackground(page);
-  await page.addInitScript(() => {
-    // Ensure the very first paints are dark (CSS may not be loaded yet).
-    const st = document.createElement('style');
-    st.textContent = `
-      html, body { background: #0f1117 !important; color-scheme: dark; }
-    `;
-    document.head.appendChild(st);
-  });
+  await addForceDarkFirstPaintInitScript(page);
   await page.addInitScript(installDemoPointer);
 
+  const clipStart = Date.now();
   await run(page);
   await settle(page);
-  await delay(750);
+  await padClipToMs(page, clipStart, CLIP_MS);
 
   const video = page.video();
-  await page.close();
+  await page.close({ runBeforeUnload: true });
   if (!video) throw new Error('recordVideo did not produce a page video');
-  const outPath = path.join(SLIDES_DIR, `${name}.webm`);
-  await video.saveAs(outPath);
   await context.close();
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  const tmpVideoPath = await video.path();
+  const outPath = path.join(STILLS_DIR, `${name}.webm`);
+  await fs.mkdir(path.dirname(outPath), { recursive: true });
+  await fs.rename(tmpVideoPath, outPath);
+  await fs.rm(tmpDir, { recursive: true, force: true });
   return outPath;
 }
 
-function writeVideoConcatManifest(videoPaths: string[], manifestPath: string): void {
-  fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+async function writeVideoConcatManifest(videoPaths: string[], manifestPath: string): Promise<void> {
+  await fs.mkdir(path.dirname(manifestPath), { recursive: true });
   const lines = videoPaths.map((p) => `file '${p.split(path.sep).join('/')}'`);
-  fs.writeFileSync(manifestPath, `${lines.join('\n')}\n`);
+  await fs.writeFile(manifestPath, `${lines.join('\n')}\n`, 'utf8');
   console.log(`\nManifest written → ${manifestPath}\n  Clips : ${videoPaths.length}\n`);
 }
 
@@ -340,6 +332,155 @@ async function landGetStarted(page: Page): Promise<void> {
   await scrollExplorePage(page);
 }
 
+type SlideDefinition = {
+  key: string;
+  title: string;
+  subtitle: string;
+  bullets: string[];
+  capture: (page: Page) => Promise<void>;
+};
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function renderCompositeSlide(
+  browser: Browser,
+  def: SlideDefinition,
+  pageClipPath: string,
+  outputPath: string
+): Promise<void> {
+  const logoPng = await fs.readFile(APPFLOW_LOGO_PATH);
+  const logoData = asDataUri(logoPng);
+
+  const bulletsHtml = def.bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('');
+
+  const slideDir = path.dirname(outputPath);
+  await fs.mkdir(slideDir, { recursive: true });
+
+  const clipStart = Date.now();
+  const context = await browser.newContext({
+    viewport: { width: 1920, height: 1080 },
+    reducedMotion: 'no-preference',
+    ...recordVideoForViewport(slideDir, { width: 1920, height: 1080 }),
+  });
+  const page = await context.newPage();
+  await overrideChromiumCaptureBackground(page);
+
+  await withLocalClipServer({ '/clip.webm': pageClipPath }, async (origin) => {
+    await page.setContent(
+      `<!DOCTYPE html>
+<html style="background:#0b1220;color-scheme:dark">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      *{box-sizing:border-box}
+      html{background:#0b1220}
+      body{
+        margin:0;width:1920px;height:1080px;overflow:hidden;
+        background:
+          radial-gradient(circle at 14% 18%, rgba(108,99,255,0.35) 0%, transparent 48%),
+          radial-gradient(circle at 82% 78%, rgba(0,217,163,0.22) 0%, transparent 52%),
+          linear-gradient(140deg, #0b1220 0%, #0f172a 55%, #0b1220 100%);
+        color:#f8fafc;
+        font-family: system-ui, -apple-system, Segoe UI, Inter, sans-serif;
+      }
+      /* Leave space for the header so the video frame can be sized predictably. */
+      .wrap{
+        position:absolute;
+        left:64px; right:64px;
+        top:260px; bottom:72px;
+        display:flex;
+        gap:48px;
+        align-items:flex-start;
+        justify-content:space-between;
+      }
+      .card{
+        border:1px solid rgba(148,163,184,0.16);
+        background: rgba(2,6,23,0.55);
+        border-radius: 22px;
+        box-shadow: 0 35px 90px rgba(0,0,0,0.55);
+        overflow:hidden;
+      }
+      .video{
+        position:relative;
+        /* Match the captured clip (1280×720 = 16:9) and avoid letterbox bars. */
+        height: 690px;
+        aspect-ratio: 16 / 9;
+        flex: 0 0 auto;
+      }
+      .video video{
+        width:100%;height:100%;display:block;
+        background:#0f1117;
+        object-fit:cover;
+        opacity:0;
+      }
+      .video video.sr-demo-video-visible{opacity:1}
+      .header{
+        position:absolute;left:64px;top:56px;right:64px;
+        display:flex;align-items:flex-start;justify-content:space-between;gap:32px
+      }
+      .brand{
+        display:flex;align-items:center;gap:14px;
+        padding:10px 14px;border-radius:999px;
+        border:1px solid rgba(148,163,184,0.22);
+        background: rgba(2,6,23,0.35);
+        color: rgba(226,232,240,0.92);
+        font-weight:700;letter-spacing:0.02em;
+      }
+      .brand img{width:34px;height:34px;border-radius:10px;display:block}
+      .title{margin-top:18px;font-size:54px;line-height:1.08;font-weight:900;letter-spacing:-0.03em}
+      .subtitle{margin-top:18px;font-size:26px;line-height:1.35;color:#cbd5e1;font-weight:500}
+      .panel{
+        padding:28px 30px;
+        height: 690px;
+        width: 480px;
+        flex: 0 0 auto;
+      }
+      .bullets{margin:22px 0 0 0;padding-left:1.1em}
+      .bullets li{font-size:22px;line-height:1.5;margin:10px 0;color:#e2e8f0}
+      .bullets li::marker{color:#22d3ee}
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <div>
+        <div class="brand"><img src="${logoData}" alt="AppFlow" /> AppFlow demo</div>
+        <div class="title">${escapeHtml(def.title)}</div>
+        <div class="subtitle">${escapeHtml(def.subtitle)}</div>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <div class="card video">
+        <video class="screen-video" src="${origin}/clip.webm" muted playsinline preload="auto"></video>
+      </div>
+      <div class="card panel">
+        <div class="brand" style="display:inline-flex"><img src="${logoData}" alt=\"\" /> Highlights</div>
+        <ul class="bullets">${bulletsHtml}</ul>
+      </div>
+    </div>
+  </body>
+</html>`,
+      { waitUntil: 'load' }
+    );
+
+    await page.waitForTimeout(80);
+    await primeEmbeddedDemoVideos(page);
+    await padClipToMs(page, clipStart, CLIP_MS);
+  });
+
+  const vid = page.video();
+  await context.close();
+  const tmp = vid ? await vid.path() : null;
+  if (!tmp) throw new Error('Playwright did not produce a composite slide recording.');
+  await fs.rename(tmp, outputPath);
+}
+
 /** Install deterministic profile API for capture (see e2e/fixtures/appflowProfile.ts). */
 async function routeDemoProfileFixture(context: BrowserContext): Promise<void> {
   await context.route('**/api/demo-profile', async (route) => {
@@ -358,76 +499,96 @@ async function routeDemoProfileFixture(context: BrowserContext): Promise<void> {
 // ── Test ──────────────────────────────────────────────────────────────────────
 
 test('capture AppFlow demo tour', async ({ browser }) => {
-  fs.mkdirSync(SLIDES_DIR, { recursive: true });
+  await fs.mkdir(SLIDES_DIR, { recursive: true });
+  await fs.mkdir(STILLS_DIR, { recursive: true });
 
-  const clips: string[] = [];
+  /** One raw page-capture clip + one composited slide output per definition. */
+  const slides: SlideDefinition[] = [
+    {
+      key: '01-home',
+      title: 'A clean landing experience',
+      subtitle: 'Start with a simple message, crisp CTAs, and modern layout.',
+      bullets: ['Fast first paint and simple navigation', 'Hero + stats block for quick scanning', 'Built for consistent demo capture'],
+      capture: async (page) => landOnPage(page, '/', 'page-home'),
+    },
+    {
+      key: '02-features',
+      title: 'Feature overview at a glance',
+      subtitle: 'A grid of capabilities that reads well on video.',
+      bullets: ['Cards keep focus and pacing', 'Readable contrast and spacing', 'Easy to extend with new sections'],
+      capture: async (page) => landOnPage(page, '/features', 'page-features'),
+    },
+    {
+      key: '03-dashboard',
+      title: 'Metrics + trends',
+      subtitle: 'A dashboard layout with KPI cards and a small chart.',
+      bullets: ['Clear KPI deltas', 'Simple chart for movement', 'Great for scroll-based exploration'],
+      capture: async (page) => landOnPage(page, '/dashboard', 'page-dashboard'),
+    },
+    {
+      key: '04-profile',
+      title: 'Dynamic profile data',
+      subtitle: 'This page loads from an API that Playwright can fixture.',
+      bullets: ['Fixture-driven demo content', 'Consistent test IDs for automation', 'Profile cards and skill tags'],
+      capture: async (page) => landProfile(page),
+    },
+    {
+      key: '05-get-started',
+      title: 'Conversion-friendly signup',
+      subtitle: 'A clean form layout with validation + success state.',
+      bullets: ['Simple fields and spacing', 'Clear success banner', 'Great for scripted typing demos'],
+      capture: async (page) => landGetStarted(page),
+    },
+    {
+      key: '06-signup-filled',
+      title: 'Scripted input capture',
+      subtitle: 'Playwright types and scrolls smoothly for a demo-ready clip.',
+      bullets: ['Visible cursor + clicks', 'Human-like typing speed', 'No jitter at scroll bounds'],
+      capture: async (page) => {
+        await page.goto('/get-started');
+        await page.waitForSelector('[data-testid="page-get-started"]');
+        await delay(180);
+        await moveAndType(page, '[data-testid="input-name"]', 'Jane Smith');
+        await delay(120);
+        await moveAndType(page, '[data-testid="input-email"]', 'jane@company.com');
+        await delay(120);
+        await moveAndType(page, '[data-testid="input-password"]', 'super-secret-pw');
+        await delay(180);
+        await scrollExplorePage(page);
+      },
+    },
+    {
+      key: '07-signup-success',
+      title: 'Success state',
+      subtitle: 'A final clip showing the submit + confirmation message.',
+      bullets: ['Clickable submit button', 'Instant feedback on success', 'Stitches cleanly into a final MP4'],
+      capture: async (page) => {
+        await page.goto('/get-started');
+        await page.waitForSelector('[data-testid="page-get-started"]');
+        await delay(160);
+        await moveAndType(page, '[data-testid="input-name"]', 'Jane Smith');
+        await delay(110);
+        await moveAndType(page, '[data-testid="input-email"]', 'jane@company.com');
+        await delay(110);
+        await moveAndType(page, '[data-testid="input-password"]', 'super-secret-pw');
+        await delay(180);
+        await moveAndClick(page, '[data-testid="btn-submit"]');
+        await page.waitForSelector('[data-testid="success-banner"]');
+        await delay(220);
+        await scrollExplorePage(page);
+      },
+    },
+  ];
 
-  clips.push(
-    await recordSlide(browser, '01-home', async (page) => {
-      await landOnPage(page, '/', 'page-home');
-    })
-  );
+  const slidePaths: string[] = [];
 
-  clips.push(
-    await recordSlide(browser, '02-features', async (page) => {
-      await landOnPage(page, '/features', 'page-features');
-    })
-  );
-
-  clips.push(
-    await recordSlide(browser, '03-dashboard', async (page) => {
-      await landOnPage(page, '/dashboard', 'page-dashboard');
-    })
-  );
-
-  clips.push(
-    await recordSlide(browser, '04-profile', async (page) => {
-      await landProfile(page);
-    })
-  );
-
-  clips.push(
-    await recordSlide(browser, '05-get-started', async (page) => {
-      await landGetStarted(page);
-    })
-  );
-
-  clips.push(
-    await recordSlide(browser, '06-signup-filled', async (page) => {
-      await page.goto('/get-started');
-      await page.waitForSelector('[data-testid="page-get-started"]');
-      await delay(220);
-      await moveAndType(page, '[data-testid="input-name"]', 'Jane Smith');
-      await delay(140);
-      await moveAndType(page, '[data-testid="input-email"]', 'jane@company.com');
-      await delay(140);
-      await moveAndType(page, '[data-testid="input-password"]', 'super-secret-pw');
-      await delay(200);
-      await scrollExplorePage(page);
-    })
-  );
-
-  clips.push(
-    await recordSlide(browser, '07-signup-success', async (page) => {
-      await page.goto('/get-started');
-      await page.waitForSelector('[data-testid="page-get-started"]');
-      await delay(180);
-      await moveAndType(page, '[data-testid="input-name"]', 'Jane Smith');
-      await delay(110);
-      await moveAndType(page, '[data-testid="input-email"]', 'jane@company.com');
-      await delay(110);
-      await moveAndType(page, '[data-testid="input-password"]', 'super-secret-pw');
-      await delay(200);
-      await moveAndClick(page, '[data-testid="btn-submit"]');
-      await page.waitForSelector('[data-testid="success-banner"]');
-      await delay(280);
-      await scrollExplorePage(page);
-    })
-  );
-
-  for (const c of clips) {
-    console.log(`  ✓ ${path.basename(c)}`);
+  for (const def of slides) {
+    const rawPath = await recordSlide(browser, def.key, def.capture);
+    const slidePath = path.join(SLIDES_DIR, `${def.key}.webm`);
+    await renderCompositeSlide(browser, def, rawPath, slidePath);
+    slidePaths.push(slidePath);
+    console.log(`  ✓ ${path.basename(slidePath)}`);
   }
 
-  writeVideoConcatManifest(clips, MANIFEST_PATH);
+  await writeVideoConcatManifest(slidePaths, MANIFEST_PATH);
 });
