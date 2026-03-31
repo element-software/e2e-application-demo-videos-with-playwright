@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+app/node_modules/
+
+# Build output
+app/.next/
+app/out/
+
+# Playwright
+test-results/
+playwright-report/
+
+# Demo pipeline — generated artefacts (not checked in)
+demo/slides/
+demo/manifest.txt
+
+# Audio (replace with your own; not committed)
+audio/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.env
+.env.local

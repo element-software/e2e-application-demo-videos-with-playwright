@@ -1,0 +1,75 @@
+name: Demo Video Pipeline
+
+on:
+  workflow_dispatch:           # run on demand from the Actions tab
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'demo.config.mjs'
+      - 'playwright.config.ts'
+
+jobs:
+  demo-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── System dependencies ─────────────────────────────────────────────
+      - name: Install ffmpeg
+        run: sudo apt-get update -y && sudo apt-get install -y ffmpeg
+
+      # ── Node.js ─────────────────────────────────────────────────────────
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install app dependencies
+        run: npm ci --prefix app
+
+      # ── Playwright browsers ─────────────────────────────────────────────
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      # ── Build the app (optional — webServer uses dev mode by default) ───
+      # Uncomment if you prefer to serve the production build instead:
+      # - name: Build app
+      #   run: npm run app:build
+      # - name: Start preview server (background)
+      #   run: npm run app:preview &
+
+      # ── Capture screenshots & generate manifest ──────────────────────────
+      - name: Capture demo slides
+        run: npm run demo:video:capture
+
+      # ── Render MP4 ───────────────────────────────────────────────────────
+      - name: Render demo video
+        run: npm run demo:video:render
+
+      # ── Upload artefact ──────────────────────────────────────────────────
+      - name: Upload demo video
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-video
+          path: demo/output/demo.mp4
+          retention-days: 30
+
+      - name: Upload slides (optional debug)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-slides
+          path: demo/slides/
+          retention-days: 7
