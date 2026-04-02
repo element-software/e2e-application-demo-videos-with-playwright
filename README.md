@@ -38,31 +38,31 @@ One command. One video. Ready to share.
 <table>
   <tr>
     <td align="center">
-      <img src="e2e/screenshots/01-lobby-host.png" alt="Game lobby — host view" width="400"><br>
+      <img src="e2e/screenshots/01-lobby-host.png" alt="Game lobby — host view" width="100%"><br>
       <sub><b>Game lobby — host view</b></sub>
     </td>
     <td align="center">
-      <img src="e2e/screenshots/02-round1-host-describer.png" alt="Round 1 — host describing" width="400"><br>
+      <img src="e2e/screenshots/02-round1-host-describer.png" alt="Round 1 — host describing" width="100%"><br>
       <sub><b>Round 1 — host describing</b></sub>
     </td>
   </tr>
   <tr>
     <td align="center">
-      <img src="e2e/screenshots/03-scoring-point.png" alt="Scoring a point" width="400"><br>
+      <img src="e2e/screenshots/03-scoring-point.png" alt="Scoring a point" width="100%"><br>
       <sub><b>Scoring a point</b></sub>
     </td>
     <td align="center">
-      <img src="e2e/screenshots/10-scoreboard-initial.png" alt="Final scoreboard" width="400"><br>
+      <img src="e2e/screenshots/10-scoreboard-initial.png" alt="Final scoreboard" width="100%"><br>
       <sub><b>Final scoreboard</b></sub>
     </td>
   </tr>
   <tr>
     <td align="center">
-      <img src="e2e/screenshots/06-round2-dave-describer.png" alt="Round 2 — player view" width="400"><br>
+      <img src="e2e/screenshots/06-round2-dave-describer.png" alt="Round 2 — player view" width="100%"><br>
       <sub><b>Round 2 — player view</b></sub>
     </td>
     <td align="center">
-      <img src="e2e/screenshots/08-game-ended-host.png" alt="Game ended — host view" width="400"><br>
+      <img src="e2e/screenshots/08-game-ended-host.png" alt="Game ended — host view" width="100%"><br>
       <sub><b>Game ended — host view</b></sub>
     </td>
   </tr>
