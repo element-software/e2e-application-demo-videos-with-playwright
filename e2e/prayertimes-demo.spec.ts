@@ -776,7 +776,7 @@ test('capture prayertimes.dev demo — desktop + mobile', async ({ browser }) =>
       subtitle: 'Choose from 15+ calculation methods and your preferred school of thought.',
       features: [
         'ISNA, MWL, Egypt, Makkah & more',
-        'Hanafi and Shafi\u02bci Asr methods',
+        'Hanafi and Shafi\u02bbi Asr methods',
         'Hijri date display option',
       ],
       capture: async (page) => {

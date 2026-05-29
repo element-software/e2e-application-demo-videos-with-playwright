@@ -538,7 +538,7 @@ test('capture prayertimes.dev demo — mobile reel', async ({ browser }) => {
       key: '05-settings',
       title: 'Flexible Calculation Settings',
       subtitle: 'Choose from 15+ methods and your preferred school of thought.',
-      features: ['ISNA, MWL, Egypt, Makkah & more', 'Hanafi and Shafiʼi Asr methods', 'Hijri date display option'],
+      features: ['ISNA, MWL, Egypt, Makkah & more', 'Hanafi and Shafi\u02bbi Asr methods', 'Hijri date display option'],
       capture: async (page) => {
         await navigateToSection(page, ['/settings', '/preferences', '/options', '/config'], ['Settings', 'Preferences', 'Options']);
         await pulseHighlight(page, 'select, [class*="method"], [class*="calculation"], [aria-label*="method" i], [class*="calc-method"]');
