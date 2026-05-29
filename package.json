@@ -10,9 +10,16 @@
     "app:preview": "npm run preview --prefix app",
     "demo:video:capture": "npx playwright test",
     "demo:video:render": "node scripts/render-video.mjs",
-    "demo:video": "npm run demo:video:capture && npm run demo:video:render"
+    "demo:video": "npm run demo:video:capture && npm run demo:video:render",
+    "prayertimes:demo:capture": "npx playwright test --config playwright.prayertimes.config.ts e2e/prayertimes-demo.spec.ts",
+    "prayertimes:demo:render": "node scripts/render-video.mjs --config demo.prayertimes.config.mjs",
+    "prayertimes:demo": "npm run prayertimes:demo:capture && npm run prayertimes:demo:render",
+    "prayertimes:reel:capture": "npx playwright test --config playwright.prayertimes.config.ts e2e/prayertimes-demo-mobile.spec.ts",
+    "prayertimes:reel:render": "node scripts/render-video.mjs --config demo.prayertimes-mobile.config.mjs",
+    "prayertimes:reel": "npm run prayertimes:reel:capture && npm run prayertimes:reel:render"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.2"
+    "@playwright/test": "^1.58.2",
+    "typescript": "^6.0.3"
   }
 }
